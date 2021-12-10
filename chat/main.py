@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from aiohttp import web
 import aioredis
@@ -6,6 +7,9 @@ from aiohttp_session import setup
 from aiohttp_session.redis_storage import RedisStorage
 
 from routes import setup_routes
+
+logger = logging.getLogger('mychat.server')
+logging.basicConfig(level=logging.INFO)
 
 async def start_server():
     app = web.Application()
@@ -24,6 +28,7 @@ async def start_server():
         '8080',
         reuse_port=True,
     )
+    logger.info("Start server.")
     await site.start()
 
 def main():
