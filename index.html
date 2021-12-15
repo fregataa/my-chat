@@ -15,9 +15,14 @@
          control.html(control.html() + date_prompt + msg + '<br/>');
          control.scrollTop(control.scrollTop() + 1000);
        }
-       function connect() {
+       function connect(name) {
          disconnect();
-         var wsUri = (window.location.protocol=='https:'&&'wss://'||'ws://')+window.location.host;
+         if(name === ''){
+           log('Empty name is not allowed!')
+           return
+         }
+        //  var wsUri = (window.location.protocol=='https:'&&'wss://'||'ws://')+window.location.host;
+         var wsUri = 'ws://127.0.0.1:8080/' + name;
          conn = new WebSocket(wsUri);
          //log('Connecting...');
          conn.onopen = function() {
@@ -74,7 +79,8 @@
        }
        $('#connect').on('click', function() {
          if (conn == null) {
-           connect();
+           var name = $('#name').val();
+           connect(name);
          } else {
            disconnect();
          }
@@ -101,8 +107,9 @@
   <body>
     <h3>Chat!</h3>
     <div>
+      <input id="name" type="text" placeholder="Input Name"/>
       <button id="connect">Connect</button>&nbsp;|&nbsp;Status:
-      <span id="name">UNKNOWN</span>
+      <!-- <span id="name">UNKNOWN</span> -->
       <span id="status">disconnected</span>
     </div>
     <div id="log"
