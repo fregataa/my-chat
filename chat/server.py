@@ -42,7 +42,7 @@ async def shutdown(app):
 async def start_server():
     app = web.Application()
 
-    redis_url = 'redis://localhost'
+    redis_url = 'redis://redis_server'
     redis = await aioredis.from_url(redis_url)
     storage = RedisStorage(redis)
     app['websockets'] = {}

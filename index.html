@@ -48,6 +48,9 @@
              case 'sent':
                log(data.name + ': ' + data.text);
                break;
+             case 'get':
+               log('Key: ' + data.key + '\tValue: ' + data.val);
+               break
            }
          };
          conn.onclose = function() {
