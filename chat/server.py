@@ -11,6 +11,34 @@ from views import index
 logger = logging.getLogger('mychat.server')
 logging.basicConfig(level=logging.INFO)
 
+def cancel_tasks(to_cancel, loop):
+    if not to_cancel:
+        return
+    
+    for task in to_cancel:
+        task.cancel()
+    
+    loop.run_until_complete(asyncio.gather(*to_cancel, return_exceptions=True))
+    
+    for task in to_cancel:
+        if task.cancelled():
+            continue
+        if task.exception() is not None:
+            loop.call_exception_handler(
+                {
+                    'message': 'Unhandled exception during asyncio.run() shutdown',
+                    'exception': task.exception(),
+                    'task': task,
+                }
+            )
+
+async def shutdown(app):
+    for mw in app.middlewares:
+        await mw.close()
+    for ws in app['websockets'].values():
+        await ws.close()
+    app['websockets'].clear()
+
 async def start_server():
     app = web.Application()
 
@@ -19,10 +47,7 @@ async def start_server():
     storage = RedisStorage(redis)
     app['websockets'] = {}
 
-    # app.on_shutdown.append(shutdown)
-
-    # aiohttp_jinja2.setup(
-    #     app, loader=jinja2.PackageLoader('chat', 'templates'))
+    app.on_shutdown.append(shutdown)
 
     setup(app, storage)
 
@@ -43,8 +68,20 @@ async def start_server():
 def main():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.create_task(start_server())
-    loop.run_forever()
+    server_task = loop.create_task(start_server())
+
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        logger.exception(e)
+    finally:
+        cancel_tasks({server_task}, loop)
+        cancel_tasks(asyncio.all_tasks(loop), loop)
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
+        asyncio.set_event_loop(None)
 
 if __name__ == '__main__':
     main()
