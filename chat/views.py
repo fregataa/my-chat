@@ -38,11 +38,8 @@ async def subscribe(ws_current, redis):
         await p.subscribe('channel:1')
         while True:
             try:
-                res = await p.parse_response(block=False, timeout=0.1)
-                if res is None:
-                    await asyncio.sleep(0)
-                else:
-                    logger.info(f"\n========\nresponse from redis: {res}")
+                res = await p.parse_response(timeout=0.1)
+                logger.info(f"\n========\nresponse from redis: {res}")
             except asyncio.TimeoutError:
                 await asyncio.sleep(0)
             else:
