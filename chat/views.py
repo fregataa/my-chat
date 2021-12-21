@@ -10,8 +10,6 @@ from aioredis.utils import str_if_bytes
 logger = logging.getLogger('mychat.server')
 logging.basicConfig(level=logging.INFO)
 
-WS_IO = None
-
 
 class InvalidCommand(web.HTTPBadRequest):
     reason = 'Invalid type of command'
@@ -19,8 +17,7 @@ class InvalidCommand(web.HTTPBadRequest):
 async def get_msg(ws_current, request, redis, send_data):
     while True:
         try:
-            msg = await ws_current.receive(timeout=0.1)
-            logger.info(f"\n========\nmessage from ws: {msg}")
+            msg = await ws_current.receive(timeout=0.0)
         except asyncio.TimeoutError:
             await asyncio.sleep(0)
         else:
@@ -38,8 +35,7 @@ async def subscribe(ws_current, redis):
         await p.subscribe('channel:1')
         while True:
             try:
-                res = await p.parse_response(timeout=0.1)
-                logger.info(f"\n========\nresponse from redis: {res}")
+                res = await p.parse_response(timeout=0.0)
             except asyncio.TimeoutError:
                 await asyncio.sleep(0)
             else:

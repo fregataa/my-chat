@@ -1,5 +1,6 @@
-import asyncio
 import logging
+import asyncio
+import multiprocessing as mp
 
 from aiohttp import web
 import aioredis
@@ -10,6 +11,8 @@ from views import index
 
 logger = logging.getLogger('mychat.server')
 logging.basicConfig(level=logging.INFO)
+
+NUM_WORKER = 2
 
 def cancel_tasks(to_cancel, loop):
     if not to_cancel:
@@ -84,4 +87,6 @@ def main():
         asyncio.set_event_loop(None)
 
 if __name__ == '__main__':
-    main()
+    for i in range(NUM_WORKER):
+        p = mp.Process(target=main)
+        p.start()
