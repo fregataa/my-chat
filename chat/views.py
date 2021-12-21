@@ -16,37 +16,29 @@ class InvalidCommand(web.HTTPBadRequest):
 
 async def get_msg(ws_current, request, redis, send_data):
     while True:
-        try:
-            msg = await ws_current.receive(timeout=0.0)
-        except asyncio.TimeoutError:
-            await asyncio.sleep(0)
+        msg = await ws_current.receive(timeout=0.0)
+        if msg.type == WSMsgType.text:
+            for ws in request.app['websockets'].values():
+                if ws is ws_current:
+                    data = json.dumps({**send_data, 'text': msg.data})
+                    await redis.publish('channel:1', data)
         else:
-            if msg.type == WSMsgType.text:
-                    for ws in request.app['websockets'].values():
-                        if ws is ws_current:
-                            data = json.dumps({**send_data, 'text': msg.data})
-                            await redis.publish('channel:1', data)
-            else:
-                break
+            break
 
 async def subscribe(ws_current, redis):
     pubsub = redis.pubsub()
     async with pubsub as p:
         await p.subscribe('channel:1')
         while True:
-            try:
-                res = await p.parse_response(timeout=0.0)
-            except asyncio.TimeoutError:
-                await asyncio.sleep(0)
-            else:
-                if res is not None:
-                    message_type = str_if_bytes(res[0])
-                    if message_type == 'unsubscribe':
-                        break
-                    elif message_type != 'subscribe':
-                        await ws_current.send_json(
-                            json.loads(str_if_bytes(res[2]))
-                        )
+            res = await p.parse_response(timeout=0.0)
+            if res is not None:
+                message_type = str_if_bytes(res[0])
+                if message_type == 'unsubscribe':
+                    break
+                elif message_type != 'subscribe':
+                    await ws_current.send_json(
+                        json.loads(str_if_bytes(res[2]))
+                    )
         await p.unsubscribe('channel:1')
     await pubsub.close()
 
