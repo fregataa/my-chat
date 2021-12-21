@@ -1,28 +1,40 @@
 import asyncio
-# import time
 
-async def hello():
-    while True:
-        print("Hello")
-        await asyncio.sleep(3)
-        print("World!")
+import async_timeout
 
-async def do_something():
+import aioredis
+
+STOPWORD = "STOP"
+
+
+async def reader(channel: aioredis.client.PubSub):
     while True:
-        print("Do something ...")
-        asyncio.sleep(1)
+        try:
+            async with async_timeout.timeout(1):
+                message = await channel.get_message(ignore_subscribe_messages=True)
+                if message is not None:
+                    print(f"(Reader) Message Received: {message}")
+                    if message["data"].decode() == STOPWORD:
+                        print("(Reader) STOP")
+                        break
+                await asyncio.sleep(0.01)
+        except asyncio.TimeoutError:
+            pass
+
 
 async def main():
-    loop = asyncio.get_event_loop()
-    asyncio.set_event_loop(loop)
-    t1 = await loop.create_task(hello())
-    t2 = await loop.create_task(do_something())
+    redis = aioredis.from_url("redis://localhost")
+    pubsub = redis.pubsub()
+    await pubsub.subscribe("channel:1", "channel:2")
 
-    # asyncio.ensure_future(hello())
-    # asyncio.ensure_future(do_something())
+    future = asyncio.create_task(reader(pubsub))
 
-    # loop.run_until_complete(t1)
-    # loop.run_until_complete(t2)
+    await redis.publish("channel:1", "Hello")
+    await redis.publish("channel:2", "World")
+    await redis.publish("channel:1", STOPWORD)
 
-if __name__=="__main__":
+    await future
+
+
+if __name__ == "__main__":
     asyncio.run(main())

@@ -13,10 +13,13 @@ services:
         - 6379:6379
 
   my-chat:
+    container_name: my-chat
     build:
       dockerfile: Dockerfile
     ports:
       - 8080:8080
+    volumes:
+      - ./chat:/app/chat
     depends_on:
       - redis
     networks:

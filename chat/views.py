@@ -1,14 +1,61 @@
 
 import logging
+import json
+import asyncio
 
 from aiohttp import web, WSMsgType
-import aioredis
+from aioredis import from_url as get_redis
+from aioredis.utils import str_if_bytes
 
 logger = logging.getLogger('mychat.server')
 logging.basicConfig(level=logging.INFO)
 
+WS_IO = None
+
+
 class InvalidCommand(web.HTTPBadRequest):
     reason = 'Invalid type of command'
+
+async def get_msg(ws_current, request, redis, send_data):
+    while True:
+        try:
+            msg = await ws_current.receive(timeout=0.1)
+            logger.info(f"\n========\nmessage from ws: {msg}")
+        except asyncio.TimeoutError:
+            await asyncio.sleep(0)
+        else:
+            if msg.type == WSMsgType.text:
+                    for ws in request.app['websockets'].values():
+                        if ws is ws_current:
+                            data = json.dumps({**send_data, 'text': msg.data})
+                            await redis.publish('channel:1', data)
+            else:
+                break
+
+async def subscribe(ws_current, redis):
+    pubsub = redis.pubsub()
+    async with pubsub as p:
+        await p.subscribe('channel:1')
+        while True:
+            try:
+                res = await p.parse_response(block=False, timeout=0.1)
+                if res is None:
+                    await asyncio.sleep(0)
+                else:
+                    logger.info(f"\n========\nresponse from redis: {res}")
+            except asyncio.TimeoutError:
+                await asyncio.sleep(0)
+            else:
+                if res is not None:
+                    message_type = str_if_bytes(res[0])
+                    if message_type == 'unsubscribe':
+                        break
+                    elif message_type != 'subscribe':
+                        await ws_current.send_json(
+                            json.loads(str_if_bytes(res[2]))
+                        )
+        await p.unsubscribe('channel:1')
+    await pubsub.close()
 
 async def index(request):
     ws_current = web.WebSocketResponse()
@@ -24,46 +71,12 @@ async def index(request):
         await ws.send_json({'action': 'join', 'name': name})
     request.app['websockets'][name] = ws_current
 
-    while True:
-        msg = await ws_current.receive()
+    redis = get_redis("redis://redis_server")
 
-        if msg.type == WSMsgType.text:
-            for ws in request.app['websockets'].values():
-                if ws is ws_current:
-                    match msg.data.split()[0]:
-                        case 'set:':
-                            set_prefix = 'set: '
-                            input_data = msg.data[len(set_prefix):].split(',')
-                            if len(input_data) != 2:
-                                raise InvalidCommand
-                            redis = aioredis.from_url(
-                                "redis://redis_server", encoding="utf-8", decode_responses=True
-                            )
-                            await redis.set(input_data[0], input_data[1])
-                            log_msg = f'Completed set command. key: {input_data[0]}, val: {input_data[1]}'
-                            logger.info(log_msg)
-                        case 'get:':
-                            get_prefix = 'get: '
-                            input_data = msg.data[len(get_prefix):].split()
-                            if len(input_data) != 1:
-                                raise InvalidCommand
-                            redis = aioredis.from_url(
-                                "redis://redis_server", encoding="utf-8", decode_responses=True
-                            )
-                            val = await redis.get(input_data[0])
-                            await ws.send_json(
-                                {'action': 'get', 'key': input_data[0], 'val': val}
-                            )
-                            log_msg = f'Completed get command. key: {input_data[0]}, val: {val}'
-                            logger.info(log_msg)
-                        case _:
-                            pass
-
-                else:
-                    await ws.send_json(
-                        {'action': 'sent', 'name': name, 'text': msg.data})
-        else:
-            break
+    await asyncio.gather(
+        subscribe(ws_current, redis),
+        get_msg(ws_current, request, redis, {'action': 'sent', 'name': name}),
+    )
 
     del request.app['websockets'][name]
     logger.info('%s disconnected.', name)
