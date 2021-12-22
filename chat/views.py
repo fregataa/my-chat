@@ -16,7 +16,7 @@ class InvalidCommand(web.HTTPBadRequest):
 
 async def get_msg(ws_current, request, redis, send_data):
     while True:
-        msg = await ws_current.receive(timeout=0.0)
+        msg = await ws_current.receive()
         if msg.type == WSMsgType.text:
             for ws in request.app['websockets'].values():
                 if ws is ws_current:
@@ -30,7 +30,7 @@ async def subscribe(ws_current, redis):
     async with pubsub as p:
         await p.subscribe('channel:1')
         while True:
-            res = await p.parse_response(timeout=0.0)
+            res = await p.parse_response()
             if res is not None:
                 message_type = str_if_bytes(res[0])
                 if message_type == 'unsubscribe':
@@ -58,10 +58,15 @@ async def index(request):
 
     redis = get_redis("redis://redis_server")
 
-    await asyncio.gather(
-        subscribe(ws_current, redis),
-        get_msg(ws_current, request, redis, {'action': 'sent', 'name': name}),
-    )
+    # await asyncio.gather(
+    #     subscribe(ws_current, redis),
+    #     get_msg(ws_current, request, redis, {'action': 'sent', 'name': name}),
+    # )
+
+    t1 = asyncio.create_task(subscribe(ws_current, redis))
+    t2 = asyncio.create_task(get_msg(ws_current, request, redis, {'action': 'sent', 'name': name}))
+
+    
 
     del request.app['websockets'][name]
     logger.info('%s disconnected.', name)
