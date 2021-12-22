@@ -58,14 +58,13 @@ async def index(request):
 
     redis = get_redis("redis://redis_server")
 
-    # await asyncio.gather(
-    #     subscribe(ws_current, redis),
-    #     get_msg(ws_current, request, redis, {'action': 'sent', 'name': name}),
-    # )
+    await asyncio.gather(
+        subscribe(ws_current, redis),
+        get_msg(ws_current, request, redis, {'action': 'sent', 'name': name}),
+    )
 
-    t1 = asyncio.create_task(subscribe(ws_current, redis))
-    t2 = asyncio.create_task(get_msg(ws_current, request, redis, {'action': 'sent', 'name': name}))
-
+    # t1 = asyncio.create_task(subscribe(ws_current, redis))
+    # t2 = asyncio.create_task(get_msg(ws_current, request, redis, {'action': 'sent', 'name': name}))
     
 
     del request.app['websockets'][name]
